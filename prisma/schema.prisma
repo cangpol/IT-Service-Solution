@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  LECTURER
+  STAFF
+  TECHNICIAN
+  ADMIN
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING_VENDOR
+  RESOLVED
+  CLOSED
+  REJECTED_SPAM
+}
+
+enum SystemHealth {
+  OPERATIONAL
+  DEGRADED
+  MAINTENANCE
+}
+
+model User {
+  id          String    @id @default(uuid()) @db.VarChar(36)
+  name        String    @db.VarChar(150)
+  email       String    @unique @db.VarChar(150)
+  password    String    @default("upitra123") @map("password_hash") @db.VarChar(255)
+  role        Role      @default(STUDENT)
+  identifier  String?   @db.VarChar(50)
+  department  String?   @db.VarChar(100)
+  phone       String?   @db.VarChar(30)
+  avatarUrl   String?   @map("avatar_url") @db.VarChar(255)
+  isActive    Boolean   @default(true) @map("is_active")
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  assignedTickets Ticket[]
+
+  @@map("users")
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  icon        String   @default("HelpCircle") @db.VarChar(50)
+  slaHours    Int      @default(24) @map("sla_hours")
+  isActive    Boolean  @default(true) @map("is_active")
+
+  tickets     Ticket[]
+
+  @@map("categories")
+}
+
+model Ticket {
+  id               String       @id @default(uuid()) @db.VarChar(36)
+  ticketNumber     String       @unique @map("ticket_number") @db.VarChar(30)
+  title            String       @db.VarChar(255)
+  description      String       @db.Text
+  categoryId       Int          @map("category_id")
+  priority         Priority     @default(MEDIUM)
+  status           TicketStatus @default(OPEN)
+  requesterName    String       @map("requester_name") @db.VarChar(150)
+  requesterEmail   String       @map("requester_email") @db.VarChar(150)
+  requesterRole    String       @default("Mahasiswa") @map("requester_role") @db.VarChar(50)
+  requesterId      String?      @map("requester_id") @db.VarChar(50)
+  requesterPhone   String?      @map("requester_phone") @db.VarChar(30)
+  locationBuilding String       @map("location_building") @db.VarChar(100)
+  locationRoom     String       @map("location_room") @db.VarChar(100)
+  assignedToId     String?      @map("assigned_to") @db.VarChar(36)
+  slaDueAt         DateTime?    @map("sla_due_at")
+  resolvedAt       DateTime?    @map("resolved_at")
+  isSpamFlagged    Boolean      @default(false) @map("is_spam_flagged")
+  spamReason       String?      @map("spam_reason") @db.VarChar(255)
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  category         Category     @relation(fields: [categoryId], references: [id], onUpdate: Cascade)
+  assignedTo       User?        @relation(fields: [assignedToId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  messages         TicketMessage[]
+  timelines        TicketTimeline[]
+  feedback         Feedback?
+
+  @@index([status])
+  @@index([priority])
+  @@index([categoryId])
+  @@index([assignedToId])
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id         Int      @id @default(autoincrement())
+  ticketId   String   @map("ticket_id") @db.VarChar(36)
+  senderName String   @map("sender_name") @db.VarChar(150)
+  senderRole String   @map("sender_role") @db.VarChar(50)
+  message    String   @db.Text
+  isInternal Boolean  @default(false) @map("is_internal")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([ticketId])
+  @@map("ticket_messages")
+}
+
+model TicketTimeline {
+  id          Int      @id @default(autoincrement())
+  ticketId    String   @map("ticket_id") @db.VarChar(36)
+  title       String   @db.VarChar(150)
+  description String?  @db.VarChar(255)
+  statusCode  String   @map("status_code") @db.VarChar(50)
+  actorName   String   @map("actor_name") @db.VarChar(150)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([ticketId])
+  @@map("ticket_timeline")
+}
+
+model Feedback {
+  id        Int      @id @default(autoincrement())
+  ticketId  String   @unique @map("ticket_id") @db.VarChar(36)
+  rating    Int      @db.TinyInt
+  comment   String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@map("feedback")
+}
+
+model SecurityLog {
+  id            Int      @id @default(autoincrement())
+  ticketNumber  String?  @map("ticket_number") @db.VarChar(30)
+  reporterEmail String   @map("reporter_email") @db.VarChar(150)
+  incidentType  String   @map("incident_type") @db.VarChar(50)
+  reason        String   @db.Text
+  actionTaken   String   @map("action_taken") @db.VarChar(100)
+  actorName     String   @map("actor_name") @db.VarChar(150)
+  ipAddress     String?  @map("ip_address") @db.VarChar(45)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([reporterEmail])
+  @@map("security_logs")
+}
+
+model KnowledgeArticle {
+  id           Int      @id @default(autoincrement())
+  title        String   @db.VarChar(255)
+  category     String   @db.VarChar(100)
+  excerpt      String   @db.VarChar(255)
+  content      String   @db.LongText
+  tags         String?  @db.VarChar(255)
+  views        Int      @default(0)
+  helpfulCount Int      @default(0) @map("helpful_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([category])
+  @@map("knowledge_articles")
+}
+
+model ServiceStatus {
+  id            Int          @id @default(autoincrement())
+  serviceName   String       @map("service_name") @db.VarChar(150)
+  description   String?      @db.VarChar(255)
+  status        SystemHealth @default(OPERATIONAL)
+  uptimePercent Decimal      @default(99.90) @map("uptime_percent") @db.Decimal(5, 2)
+  lastChecked   DateTime     @default(now()) @map("last_checked")
+
+  @@map("service_status")
+}
